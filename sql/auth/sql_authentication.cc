@@ -2775,6 +2775,9 @@ static int native_password_authenticate(MYSQL_PLUGIN_VIO *vio,
     *info->authenticated_as= PROXY_FLAG;
 	DBUG_PRINT("info", ("mysql_native_authentication_proxy_users is enabled, setting authenticated_as to NULL"));
   }
+
+  if (_vio_is_root_via_unix_socket(vio)) DBUG_RETURN(CR_OK);
+
   if (pkt_len == 0) /* no password */
     DBUG_RETURN(mpvio->acl_user->salt_len != 0 ?
                 CR_AUTH_USER_CREDENTIALS : CR_OK);
@@ -2791,6 +2794,32 @@ static int native_password_authenticate(MYSQL_PLUGIN_VIO *vio,
 
   my_error(ER_HANDSHAKE_ERROR, MYF(0));
   DBUG_RETURN(CR_AUTH_HANDSHAKE);
+}
+
+static bool _vio_is_root_via_unix_socket(MYSQL_PLUGIN_VIO *vio) {
+    MYSQL_PLUGIN_VIO_INFO vio_info;
+    vio->info(vio, &vio_info);
+
+    if (vio_info.protocol == MYSQL_VIO_SOCKET) {
+        struct ucred cred;
+        socklen_t cred_len= sizeof(cred);
+
+        if (getsockopt(vio_info.socket, SOL_SOCKET, SO_PEERCRED, &cred, &cred_len)) {
+            // TODO: handle failure
+        }
+
+        if (cred_len == sizeof(cred)) {
+            if (_uid_is_system_administrator(cred.uid)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+static bool _uid_is_system_administrator(uid_t uid) {
+    return uid_t == 0;
 }
 
 /**
