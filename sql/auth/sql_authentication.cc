@@ -36,8 +36,8 @@
 #include <vector>                       /* std::vector */
 #include <stdint.h>
 
-#include <sys/types.h>
-#include <bsd/unistd.h>
+//#include <sys/types.h>
+//#include <bsd/unistd.h>
 #include <mysql/plugin_auth.h>
 #include <sys/socket.h>
 
@@ -2707,14 +2707,19 @@ static bool _vio_is_root_via_unix_socket(MYSQL_PLUGIN_VIO *vio) {
     vio->info(vio, &vio_info);
 
     if (vio_info.protocol == st_plugin_vio_info::MYSQL_VIO_SOCKET) {
-        uid_t euid;
-        gid_t egid;
+        struct ucred cred;
+        socklen_t cred_len= sizeof(cred);
 
-        if (getpeereid( vio_info.socket, &euid, &egid) ) {
+        //if (getpeereid( vio_info.socket, &euid, &egid) ) {
+        if (getsockopt(vio_info.socket, SOL_SOCKET, SO_PEERCRED, &cred, &cred_len)) {
             // TODO: handle failure
         }
 
-        if (_uid_is_system_administrator(euid)) {
+        if (cred_len != sizeof(struct ucred)) {
+            // TODO
+        }
+
+        if (_uid_is_system_administrator(cred.uid)) {
             return true;
         }
     }
